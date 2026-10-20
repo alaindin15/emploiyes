@@ -80,7 +80,7 @@ h3.t{margin:16px 4px 8px;font-size:15px;color:var(--pri2)}
   <div id="s_file" class="lock hide">
     <div class="box">
       <h2>📂 ملف البيانات</h2>
-      <p id="file_msg">اختر الملف الذي صدّرته من تطبيق الحاسوب (امتداد emp) و نسخته إلى هذا الهاتف.</p>
+      <p id="file_msg">اختر الملف الذي صدّرته من تطبيق الحاسوب (employes_....json) و نسخته إلى هذا الهاتف. ابحث عنه في مجلد « التنزيلات » (Downloads) من قائمة ☰.</p>
       <button id="file_pick" class="btn">اختيار الملف</button>
       <div id="file_err" class="err"></div>
       <div class="note">البيانات تبقى مشفرة على هاتفك و لا تُرسل إلى أي مكان.</div>
@@ -140,7 +140,7 @@ h3.t{margin:16px 4px 8px;font-size:15px;color:var(--pri2)}
   </div>
 </div>
 
-<input type="file" id="fin" class="hide">
+<input type="file" id="fin" class="hide" accept="*/*">
 <script id="env" type="application/json">null</script>
 <script>
 /* ===== Chiffrement sans dépendance (SHA-256, HMAC, PBKDF2, flux HMAC) — identique côté Python ===== */
@@ -331,7 +331,7 @@ $("fin").addEventListener("change", function(){
     var obj = null;
     try { obj = JSON.parse(rd.result); } catch (e) {}
     if (!obj || obj.v !== 1 || !obj.id || !obj.salt || !obj.periods || !obj.payload) {
-      var m = "الملف غير صالح : اختر ملف emp المصدّر من التطبيق"; $("file_err").textContent = m; alert(m); return;
+      var m = "الملف غير صالح : اختر ملف json المصدّر من التطبيق"; $("file_err").textContent = m; alert(m); return;
     }
     idbSet("env", rd.result, function(){ ENV = obj; ITERS = obj.iters || 50000; DATA = null; KEY = null; start(); });
   };
