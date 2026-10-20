@@ -135,6 +135,7 @@ h3.t{margin:16px 4px 8px;font-size:15px;color:var(--pri2)}
     <div class="tabs">
       <button data-t="list" class="on"><b>👥</b>القائمة</button>
       <button data-t="today"><b>📅</b>اليوم</button>
+      <button data-t="agenda"><b>🗓️</b>الأجندة</button>
       <button data-t="about"><b>ℹ️</b>حول</button>
     </div>
   </div>
@@ -494,7 +495,7 @@ function go(t){
   tab = t; stack = [];
   Array.prototype.forEach.call(document.querySelectorAll(".tabs button"), function(b){ b.classList.toggle("on", b.dataset.t === t); });
   $("sub").textContent = "آخر تحديث للمعطيات : " + DATA.exported;
-  if (t === "list") viewList(); else if (t === "today") viewToday(); else viewAbout();
+  if (t === "list") viewList(); else if (t === "today") viewToday(); else if (t === "agenda") viewAgenda(); else viewAbout();
 }
 Array.prototype.forEach.call(document.querySelectorAll(".tabs button"), function(b){ b.addEventListener("click", function(){ go(b.dataset.t); }); });
 
@@ -552,6 +553,8 @@ function viewEmp(id){
   (e.secs || []).forEach(function(s){
     h += '<div class="sec"><h4>' + esc(s[0]) + "</h4>" + s[1].map(function(r){ return '<div class="kv"><span>' + esc(r[0]) + "</span><div>" + esc(r[1]) + "</div></div>"; }).join("") + "</div>";
   });
+  var eag = agItems(todayDate(), addDays(todayDate(), 400)).filter(function(a){ return (a.em || []).indexOf(e.id) >= 0; });
+  if (eag.length) h += '<div class="sec"><h4>الأجندة (' + eag.length + ")</h4>" + eag.slice(0, 15).map(function(a){ return agCard(a, false); }).join("") + "</div>";
   var lv = (e.leaves || []).slice().sort(function(a, b){ return a.s < b.s ? 1 : -1; });
   h += '<div class="sec"><h4>الاجازات و التربصات (' + lv.length + ")</h4>";
   if (!lv.length) h += '<div class="lv"><small>لا توجد</small></div>';
@@ -575,6 +578,9 @@ function viewToday(){
     return '<div class="row" data-id="' + e.id + '">' + avatar(e, "av") + '<div class="rt"><div class="n">' + esc(e.nom) + '</div><div class="g">' + SL[e.st.t] +
       " · الرجوع " + fd(addDays(e.st.end, 1)) + '</div></div><span class="dot" style="background:' + SC[e.st.t] + '"></span></div>';
   }).join("") : '<div class="empty">لا يوجد منقطعون اليوم</div>';
+  var nd = DATA.agd == null ? 7 : DATA.agd, ups = agItems(todayDate(), addDays(todayDate(), nd));
+  h += '<h3 class="t">الأجندة : ' + (nd ? "الأيام " + nd + " القادمة" : "اليوم") + "</h3>";
+  h += ups.length ? '<div class="sec">' + ups.map(function(a){ return agCard(a, true); }).join("") + "</div>" : '<div class="empty">لا توجد مواعيد قادمة</div>';
   var by = {};
   DATA.emps.forEach(function(e){ var p = e.poste || "—"; by[p] = by[p] || { n: 0, a: 0 }; by[p].n++; if (e.st) by[p].a++; });
   h += '<h3 class="t">حسب مكان العمل</h3><div class="sec">' + Object.keys(by).map(function(p){
@@ -582,6 +588,50 @@ function viewToday(){
   }).join("") + "</div>";
   $("view").innerHTML = h;
   Array.prototype.forEach.call($("view").querySelectorAll(".row"), function(r){ r.addEventListener("click", function(){ viewEmp(+r.dataset.id); }); });
+  bindEl();
+}
+/* ---------- الأجندة ---------- */
+var AGC = { "تذكير": "#EF6C00", "موعد": "#1E88E5", "حدث": "#8E24AA", "مأمورية": "#2E7D32", "تربص": "#00897B", "دعوة": "#C62828" };
+var agRange = null, agType = "";
+function todayDate(){ var n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate()); }
+function agItems(from, to){
+  var out = (DATA.ag || []).filter(function(a){
+    if (a.f) return false;
+    var s = pd(a.d), e = pd(a.e || a.d);
+    return s <= to && e >= from;
+  });
+  var t0 = todayDate();
+  out.sort(function(x, y){ var a = pd(x.d), b = pd(y.d); a = a < t0 ? t0 : a; b = b < t0 ? t0 : b; return (a - b) || ((x.h || "99") < (y.h || "99") ? -1 : 1); });
+  return out;
+}
+function agCard(a, showEmp){
+  var s = pd(a.d), e = pd(a.e || a.d), t0 = todayDate();
+  var when = (s <= t0 && t0 <= e) ? (+s === +t0 ? "اليوم" : "جارٍ") : (+s === +addDays(t0, 1) ? "غدا" : fd(s));
+  if (a.e) when += " (" + fd(s) + " ← " + fd(e) + ")";
+  var names = (a.em || []).map(function(i){ var x = find(i); return x ? '<span class="el" data-id="' + x.id + '">' + esc(x.nom) + "</span>" : ""; }).filter(Boolean);
+  return '<div class="lv" style="border-right:4px solid ' + (AGC[a.t] || "#1F4E8C") + '"><b>' + esc(a.t) + " : " + esc(a.ti) + "</b><br><small>" + when +
+    (a.h ? " · " + esc(a.h) : "") + (a.r ? " · ↻ متكرر" : "") + "</small>" +
+    (showEmp && names.length ? "<br><small>👤 " + names.join(" ، ") + "</small>" : "") + (a.n ? "<br><small>" + esc(a.n) + "</small>" : "") + "</div>";
+}
+function bindEl(){
+  Array.prototype.forEach.call($("view").querySelectorAll(".el"), function(r){ r.style.textDecoration = "underline"; r.addEventListener("click", function(){ viewEmp(+r.dataset.id); }); });
+}
+function viewAgenda(){
+  if (agRange == null) agRange = DATA.agd == null ? 7 : DATA.agd;
+  var t0 = todayDate(), opts = [[0, "اليوم فقط"], [7, "7 أيام"], [30, "30 يوم"], [90, "90 يوم"], [400, "كل القادمة"], [-30, "السابقة (30 يوم)"]];
+  var from = agRange < 0 ? addDays(t0, agRange) : t0, to = agRange < 0 ? addDays(t0, -1) : addDays(t0, agRange);
+  var items = agItems(from, to);
+  if (agRange < 0) items = (DATA.ag || []).filter(function(a){ var e = pd(a.e || a.d); return e >= from && e <= to; }).sort(function(x, y){ return x.d < y.d ? 1 : -1; });
+  if (agType) items = items.filter(function(a){ return a.t === agType; });
+  var types = ["الكل"].concat(Object.keys(AGC));
+  var h = staleBanner() + '<div class="search"><select id="ag_r">' + opts.map(function(o){ return '<option value="' + o[0] + '"' + (o[0] === agRange ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + "</select>" +
+    '<select id="ag_t">' + types.map(function(x){ return '<option value="' + (x === "الكل" ? "" : x) + '"' + ((x === "الكل" ? "" : x) === agType ? " selected" : "") + ">" + x + "</option>"; }).join("") + "</select></div>";
+  h += '<div class="cnt" style="padding:4px 14px;color:var(--mute)">' + items.length + " عنصر</div>";
+  h += items.length ? '<div class="sec">' + items.map(function(a){ return agCard(a, true); }).join("") + "</div>" : '<div class="empty">لا توجد عناصر</div>';
+  $("view").innerHTML = h;
+  $("ag_r").addEventListener("change", function(){ agRange = +this.value; viewAgenda(); });
+  $("ag_t").addEventListener("change", function(){ agType = this.value; viewAgenda(); });
+  bindEl();
 }
 function viewAbout(){
   var st = state(), ex = (st.ex || {})[ENV.id];
