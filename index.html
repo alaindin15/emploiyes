@@ -84,9 +84,10 @@ h3.t{margin:16px 4px 8px;font-size:15px;color:var(--pri2)}
   <!-- Écran 0 : choisir le fichier de données (mode installé) -->
   <div id="s_file" class="lock hide">
     <div class="box">
-      <h2>📂 ملف البيانات</h2>
+      <h2 id="file_h">📂 ملف البيانات</h2>
       <p id="file_msg">اختر الملف الذي صدّرته من تطبيق الحاسوب (employes_....json) و نسخته إلى هذا الهاتف. ابحث عنه في مجلد « التنزيلات » (Downloads) من قائمة ☰.</p>
       <button id="file_pick" class="btn">اختيار الملف</button>
+      <button id="file_back" class="btn alt hide">‹ تغيير المفتاح</button>
       <div id="file_err" class="err"></div>
       <div class="note">البيانات تبقى مشفرة على هاتفك و لا تُرسل إلى أي مكان.</div>
     </div>
@@ -95,7 +96,7 @@ h3.t{margin:16px 4px 8px;font-size:15px;color:var(--pri2)}
   <!-- Écran 1 : clé de session -->
   <div id="s_key" class="lock hide">
     <div class="box">
-      <h2>🔑 مفتاح تسجيل الدخول</h2>
+      <h2 id="key_h">🔑 مفتاح تسجيل الدخول</h2>
       <p id="key_msg">أدخل المفتاح المعروض في تطبيق الحاسوب (بطاقة «تطبيق الهاتف» في الاعدادات).</p>
       <input id="key_in" class="inp" inputmode="numeric" autocomplete="off" placeholder="0000 0000 0000" maxlength="14">
       <div id="key_err" class="err"></div>
@@ -126,6 +127,7 @@ h3.t{margin:16px 4px 8px;font-size:15px;color:var(--pri2)}
       <div id="pin_err" class="err"></div>
       <button id="pin_ok" class="btn">دخول</button>
       <button id="pin_forgot" class="btn alt">نسيت الرمز؟ (يلزم مفتاح تسجيل الدخول)</button>
+      <button id="pin_wipe" class="btn alt" style="color:var(--bad)">مسح بيانات هذا الهاتف و البدء من جديد</button>
       <button class="btn alt imp">استيراد ملف بيانات جديد</button>
     </div>
   </div>
@@ -339,7 +341,10 @@ $("fin").addEventListener("change", function(){
     if (!obj || obj.v !== 1 || !obj.id || !obj.salt || !obj.periods || !obj.payload) {
       var m = "الملف غير صالح : اختر ملف json المصدّر من التطبيق"; $("file_err").textContent = m; alert(m); return;
     }
-    idbSet("env", rd.result, function(){ ENV = obj; ITERS = obj.iters || 50000; DATA = null; KEY = null; start(); });
+    idbSet("env", rd.result, function(){
+      ENV = obj; ITERS = obj.iters || 50000; DATA = null; KEY = null;
+      if (pendingCode && firstRun()) { var c = pendingCode; later(function(){ verifyCode(c, true); }); } else start();
+    });
   };
   rd.readAsText(f);
 });
@@ -348,12 +353,32 @@ $("file_pick").addEventListener("click", pickFile);
 
 /* ---------- 1. clé de session ---------- */
 var pendingK = null, pendingExp = null, resetPin = false;
+var pendingCode = null;                    /* première utilisation : clé saisie avant le choix du fichier */
+function firstRun(){ return !state().pin; }
+var KEY_MSG = "أدخل المفتاح المعروض في تطبيق الحاسوب (بطاقة «تطبيق الهاتف» في الاعدادات).";
 function showKey(msg){
   $("key_in").value = ""; $("key_err").textContent = "";
-  if (msg) $("key_msg").textContent = msg;
-  $("key_info").textContent = "تاريخ الملف : " + ENV.exported;
+  var first = firstRun() && !EMBEDDED;
+  $("key_h").textContent = first ? "🔑 الخطوة 1 من 3 : مفتاح تسجيل الدخول" : "🔑 مفتاح تسجيل الدخول";
+  $("key_ok").textContent = first ? "التالي" : "فتح";
+  $("key_msg").textContent = msg || KEY_MSG;
+  $("key_info").textContent = ENV ? "تاريخ الملف : " + ENV.exported : "";
+  var imp = document.querySelector("#s_key .imp"); if (imp) imp.classList.toggle("hide", EMBEDDED || first);
   show("s_key");
 }
+function showFile(){
+  $("file_err").textContent = "";
+  var first = firstRun() && pendingCode;
+  $("file_h").textContent = first ? "📂 الخطوة 2 من 3 : ملف البيانات" : "📂 ملف البيانات";
+  $("file_back").classList.toggle("hide", !first);
+  show("s_file");
+}
+$("file_back").addEventListener("click", function(){ pendingCode = null; showKey(); });
+$("pin_wipe").addEventListener("click", function(){
+  if (!confirm("سيتم مسح الملف و رمز PIN من هذا الهاتف، و تبدأ التهيئة من جديد (مفتاح تسجيل الدخول ثم الملف ثم رمز PIN). متابعة ؟")) return;
+  sdel("emp_state"); pendingCode = null; pendingK = null; resetPin = false; KEY = null; DATA = null;
+  idbSet("env", "", function(){ ENV = null; start(); });
+});
 $("key_in").addEventListener("input", function(){
   var d = digits(this.value).slice(0,12);
   this.value = d.replace(/(\d{4})(?=\d)/g, "$1 ");
@@ -361,12 +386,20 @@ $("key_in").addEventListener("input", function(){
 function tryKey(){
   var code = digits($("key_in").value);
   if (code.length !== 12) { $("key_err").textContent = "المفتاح من 12 رقما"; return; }
+  if (!ENV) { pendingCode = code; showFile(); return; }        /* première utilisation : le fichier vient ensuite */
+  verifyCode(code, false);
+}
+function keyFail(msg, fromFile){
+  if (fromFile) { pendingCode = null; showKey(); }
+  $("key_err").textContent = msg;
+}
+function verifyCode(code, fromFile){
   var t = todayStr(), cand = ENV.periods.filter(function(p){ return p.from <= t && t <= p.to; });
   if (!cand.length) {
-    $("key_err").textContent = (t < ENV.periods[0].from) ? "تاريخ الهاتف سابق لمدة الملف" : "انتهت صلاحية هذا الملف : صدّر ملفا جديدا من الحاسوب";
+    keyFail((t < ENV.periods[0].from) ? "تاريخ الهاتف سابق لمدة الملف" : "انتهت صلاحية هذا الملف : صدّر ملفا جديدا من الحاسوب", fromFile);
     return;
   }
-  $("key_err").textContent = "جار التحقق ..."; $("key_ok").disabled = true;
+  if (!fromFile) { $("key_err").textContent = "جار التحقق ..."; $("key_ok").disabled = true; } else { $("file_err").textContent = "جار التحقق من المفتاح ..."; }
   later(function(){
     var wk = pbkdf2(str2b(code), b64dec(ENV.salt), ITERS), found = null, i;
     for (i = 0; i < cand.length && !found; i++) {
@@ -374,8 +407,8 @@ function tryKey(){
       if (k) found = { k: k, exp: cand[i].to };
     }
     $("key_ok").disabled = false;
-    if (!found) { $("key_err").textContent = "مفتاح غير صحيح"; return; }
-    pendingK = found.k; pendingExp = found.exp;
+    if (!found) { keyFail(fromFile ? "المفتاح غير صحيح لهذا الملف : تأكد من المفتاح المعروض في تطبيق الحاسوب" : "مفتاح غير صحيح", fromFile); return; }
+    pendingCode = null; pendingK = found.k; pendingExp = found.exp;
     var st = state();
     if (st.pin && !resetPin) askPinToStore(); else newPin();
   });
@@ -476,7 +509,9 @@ function prepare(){
         if (!cur || (PRIO[l.t] < PRIO[cur.t] || (PRIO[l.t] === PRIO[cur.t] && end > cur.end))) e.st = { t: l.t, end: end };
       }
     });
-    e.key = norm([e.nom, e.grade, e.sifa, e.poste, e.cin, e.perso, e.tel].join(" "));
+    var pv = e.perso || "";     /* الرقم الشخصي : champ dédié (nouveaux fichiers) ou ligne de la fiche (anciens fichiers) */
+    if (!pv) (e.secs || []).forEach(function(s){ (s[1] || []).forEach(function(r){ if (r[0] === "الرقم الشخصي" && r[1] && r[1] !== "—") pv = r[1]; }); });
+    e.key = norm([e.nom, e.grade, e.sifa, e.poste, e.cin, pv, e.tel].join(" "));
   });
 }
 function annualUsed(e, year){
@@ -652,7 +687,10 @@ function viewAbout(){
 
 /* ---------- démarrage ---------- */
 function start(){
-  if (!ENV) { $("file_err").textContent = ""; show("s_file"); return; }
+  if (!state().pin && !EMBEDDED) {            /* première utilisation : 1) clé  2) fichier  3) PIN */
+    if (!ENV) { if (pendingCode) showFile(); else showKey(); return; }
+  }
+  if (!ENV) { showFile(); return; }
   ITERS = ENV.iters || 50000;
   var st0 = state(), ex0 = (st0.ex || {})[ENV.id];
   if (st0.pin && ex0 && todayStr() <= ex0.exp) showPin();
