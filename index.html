@@ -360,7 +360,9 @@ $("fin").addEventListener("change", function(){
     }
     idbSet("env", rd.result, function(){
       ENV = obj; ITERS = obj.iters || 50000; DATA = null; KEY = null;
-      if (pendingCode && firstRun()) { var c = pendingCode; later(function(){ verifyCode(c, true); }); } else start();
+      var typed = digits($("key_in").value);          /* clé déjà saisie sur l'écran 1 : on la vérifie avec ce nouveau fichier */
+      var c = pendingCode || (typed.length === 12 ? typed : null);
+      if (c && firstRun()) { later(function(){ verifyCode(c, true); }); } else start();
     });
   };
   rd.readAsText(f);
@@ -379,8 +381,9 @@ function showKey(msg){
   $("key_h").textContent = first ? "🔑 الخطوة 1 من 3 : مفتاح تسجيل الدخول" : "🔑 مفتاح تسجيل الدخول";
   $("key_ok").textContent = first ? "التالي" : "فتح";
   $("key_msg").textContent = msg || KEY_MSG;
-  $("key_info").textContent = ENV ? "تاريخ الملف : " + ENV.exported : "";
-  var imp = document.querySelector("#s_key .imp"); if (imp) imp.classList.toggle("hide", EMBEDDED || first);
+  $("key_info").textContent = ENV ? "الملف المحمّل : " + ENV.exported + (first ? " - إن كان قديما اختر ملفا جديدا بالزر أسفله" : "") : "";
+  var imp = document.querySelector("#s_key .imp");
+  if (imp) { imp.classList.toggle("hide", EMBEDDED); imp.textContent = first ? "📂 اختيار ملف بيانات آخر (يطابق هذا المفتاح)" : "استيراد ملف بيانات جديد"; }
   show("s_key");
 }
 function showFile(){
