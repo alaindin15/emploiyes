@@ -90,7 +90,7 @@ h3.t{margin:16px 4px 8px;font-size:15px;color:var(--pri2)}
   <!-- Écran 1 : clé de session -->
   <div id="s_key" class="lock hide">
     <div class="box">
-      <h2>🔑 مفتاح الجلسة</h2>
+      <h2>🔑 مفتاح تسجيل الدخول</h2>
       <p id="key_msg">أدخل المفتاح المعروض في تطبيق الحاسوب (بطاقة «تطبيق الهاتف» في الاعدادات).</p>
       <input id="key_in" class="inp" inputmode="numeric" autocomplete="off" placeholder="0000 0000 0000" maxlength="14">
       <div id="key_err" class="err"></div>
@@ -120,7 +120,7 @@ h3.t{margin:16px 4px 8px;font-size:15px;color:var(--pri2)}
       <input id="pin_in" class="inp" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN">
       <div id="pin_err" class="err"></div>
       <button id="pin_ok" class="btn">دخول</button>
-      <button id="pin_forgot" class="btn alt">نسيت الرمز؟ (يلزم مفتاح الجلسة)</button>
+      <button id="pin_forgot" class="btn alt">نسيت الرمز؟ (يلزم مفتاح تسجيل الدخول)</button>
       <button class="btn alt imp">استيراد ملف بيانات جديد</button>
     </div>
   </div>
@@ -410,7 +410,7 @@ function tryPin(){
     $("pin_ok").disabled = false;
     if (!ok) {
       st.fails = (st.fails || 0) + 1;
-      if (st.fails >= 5) { st.ex = {}; st.fails = 0; save(st); resetPin = false; showKey("تجاوزت عدد المحاولات : أدخل مفتاح الجلسة"); return; }
+      if (st.fails >= 5) { st.ex = {}; st.fails = 0; save(st); resetPin = false; showKey("تجاوزت عدد المحاولات : أدخل مفتاح تسجيل الدخول"); return; }
       save(st); $("pin_err").textContent = "رمز خاطئ (" + (5 - st.fails) + " محاولات متبقية)"; $("pin_in").value = ""; return;
     }
     st.fails = 0;
@@ -419,17 +419,17 @@ function tryPin(){
       save(st); KEY = pendingK; pendingK = null; openApp(); return;
     }
     var ex = (st.ex || {})[ENV.id];
-    if (!ex) { save(st); showKey("هذا الملف جديد : أدخل مفتاح الجلسة"); return; }
-    if (todayStr() > ex.exp) { delete st.ex[ENV.id]; save(st); showKey("انتهت مدة الجلسة : أدخل المفتاح الجديد"); return; }
+    if (!ex) { save(st); showKey("هذا الملف جديد : أدخل مفتاح تسجيل الدخول"); return; }
+    if (todayStr() > ex.exp) { delete st.ex[ENV.id]; save(st); showKey("انتهت مدة تسجيل الدخول : أدخل المفتاح الجديد"); return; }
     save(st);
     KEY = unseal(pk, b64dec(ex.wrap));
-    if (!KEY) { delete st.ex[ENV.id]; save(st); showKey("أدخل مفتاح الجلسة"); return; }
+    if (!KEY) { delete st.ex[ENV.id]; save(st); showKey("أدخل مفتاح تسجيل الدخول"); return; }
     openApp();
   });
 }
 $("pin_ok").addEventListener("click", tryPin);
 $("pin_in").addEventListener("keydown", function(e){ if (e.key === "Enter") tryPin(); });
-$("pin_forgot").addEventListener("click", function(){ resetPin = true; showKey("أدخل مفتاح الجلسة ثم اختر رمزا جديدا"); });
+$("pin_forgot").addEventListener("click", function(){ resetPin = true; showKey("أدخل مفتاح تسجيل الدخول ثم اختر رمزا جديدا"); });
 
 /* ---------- ouverture ---------- */
 function openApp(){
@@ -638,7 +638,7 @@ function viewAbout(){
   $("view").innerHTML = '<div class="sec"><h4>معلومات الملف</h4>' +
     '<div class="kv"><span>تاريخ التصدير</span><div>' + esc(DATA.exported) + "</div></div>" +
     '<div class="kv"><span>عدد الموظفين</span><div>' + DATA.emps.length + "</div></div>" +
-    '<div class="kv"><span>الجلسة صالحة إلى</span><div>' + esc(ex ? ex.exp.replace(/-/g, "/") : "—") + "</div></div>" +
+    '<div class="kv"><span>تسجيل الدخول صالح إلى</span><div>' + esc(ex ? ex.exp.replace(/-/g, "/") : "—") + "</div></div>" +
     '<div class="kv"><span>التخزين</span><div>' + (LS ? "محلي (على الهاتف)" : "غير متاح : سيطلب المفتاح عند كل فتح") + "</div></div></div>" +
     '<div class="box"><p>للتحديث : صدّر ملفا جديدا من الحاسوب، انسخه إلى الهاتف ثم ' + (EMBEDDED ? 'افتحه.' : 'اضغط « استيراد ملف بيانات جديد ».') + ' التطبيق لا يرسل أي معطيات عبر الانترنت.</p>' +
     (EMBEDDED ? "" : '<button class="btn" id="ab_imp">استيراد ملف بيانات جديد</button>') + '</div>';
@@ -651,7 +651,7 @@ function start(){
   ITERS = ENV.iters || 50000;
   var st0 = state(), ex0 = (st0.ex || {})[ENV.id];
   if (st0.pin && ex0 && todayStr() <= ex0.exp) showPin();
-  else if (st0.pin && ex0) { delete st0.ex[ENV.id]; save(st0); showKey("انتهت مدة الجلسة : أدخل المفتاح الجديد"); }
+  else if (st0.pin && ex0) { delete st0.ex[ENV.id]; save(st0); showKey("انتهت مدة تسجيل الدخول : أدخل المفتاح الجديد"); }
   else showKey();
 }
 if (!EMBEDDED && location.protocol.indexOf("http") === 0) {      /* application installable (PWA) */
