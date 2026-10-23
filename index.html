@@ -69,11 +69,16 @@ h3.t{margin:16px 4px 8px;font-size:15px;color:var(--pri2)}
 .bar{height:10px;border-radius:6px;background:var(--chip);overflow:hidden;margin:6px 0}
 .bar i{display:block;height:100%;background:var(--pri2)}
 .back{background:none;border:0;color:var(--pri2);font-size:15px;padding:6px 2px;margin-bottom:6px;font-weight:700}
+.inst{position:sticky;top:0;z-index:30;background:#1F4E8C;color:#fff;padding:10px 12px;display:flex;gap:10px;align-items:center;font-size:14px;line-height:1.5;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.inst span{flex:1}
+.inst button{border:0;border-radius:10px;padding:8px 14px;font-weight:700;background:#fff;color:#1F4E8C;font-size:14px}
+.inst button.x{background:transparent;color:#fff;font-size:20px;padding:2px 8px}
 .stale{background:#FFF3CD;color:#6B4E00;border-radius:12px;padding:10px 12px;font-size:13px;margin-bottom:10px;line-height:1.6}
 .empty{text-align:center;color:var(--mute);padding:30px 0}
 </style>
 </head>
 <body>
+<div id="inst" class="inst hide"><span id="inst_t"></span><button id="inst_b" class="hide">تثبيت</button><button id="inst_x" class="x" aria-label="إغلاق">✕</button></div>
 <div id="app">
 
   <!-- Écran 0 : choisir le fichier de données (mode installé) -->
@@ -104,9 +109,9 @@ h3.t{margin:16px 4px 8px;font-size:15px;color:var(--pri2)}
   <div id="s_newpin" class="lock hide">
     <div class="box">
       <h2>🔒 رمز PIN</h2>
-      <p>اختر رمزا سريا يحمي التطبيق في كل مرة تفتحه (6 أرقام على الأقل).</p>
-      <input id="np1" class="inp" type="password" inputmode="numeric" autocomplete="off" placeholder="الرمز الجديد">
-      <input id="np2" class="inp" type="password" inputmode="numeric" autocomplete="off" placeholder="تأكيد الرمز" style="margin-top:10px">
+      <p>اختر رمزا سريا يحمي التطبيق في كل مرة تفتحه (4 أرقام).</p>
+      <input id="np1" class="inp" type="password" inputmode="numeric" autocomplete="off" maxlength="4" placeholder="الرمز الجديد (4 أرقام)">
+      <input id="np2" class="inp" type="password" inputmode="numeric" autocomplete="off" maxlength="4" placeholder="تأكيد الرمز" style="margin-top:10px">
       <div id="np_err" class="err"></div>
       <button id="np_ok" class="btn">حفظ و دخول</button>
     </div>
@@ -382,7 +387,7 @@ $("key_in").addEventListener("keydown", function(e){ if (e.key === "Enter") tryK
 function newPin(){ $("np1").value = ""; $("np2").value = ""; $("np_err").textContent = ""; show("s_newpin"); }
 $("np_ok").addEventListener("click", function(){
   var a = digits($("np1").value), b = digits($("np2").value);
-  if (a.length < 6) { $("np_err").textContent = "6 أرقام على الأقل"; return; }
+  if (a.length !== 4) { $("np_err").textContent = "الرمز يتكون من 4 أرقام"; return; }
   if (a !== b) { $("np_err").textContent = "الرمزان غير متطابقين"; return; }
   $("np_err").textContent = "جار الحفظ ..."; $("np_ok").disabled = true;
   later(function(){
@@ -471,7 +476,7 @@ function prepare(){
         if (!cur || (PRIO[l.t] < PRIO[cur.t] || (PRIO[l.t] === PRIO[cur.t] && end > cur.end))) e.st = { t: l.t, end: end };
       }
     });
-    e.key = norm([e.nom, e.grade, e.sifa, e.poste, e.cin, e.tel].join(" "));
+    e.key = norm([e.nom, e.grade, e.sifa, e.poste, e.cin, e.perso, e.tel].join(" "));
   });
 }
 function annualUsed(e, year){
@@ -653,6 +658,34 @@ function start(){
   if (st0.pin && ex0 && todayStr() <= ex0.exp) showPin();
   else if (st0.pin && ex0) { delete st0.ex[ENV.id]; save(st0); showKey("انتهت مدة تسجيل الدخول : أدخل المفتاح الجديد"); }
   else showKey();
+}
+/* ---------- bannière : proposer l'installation de l'application ---------- */
+var deferredInstall = null, instTimer = null;
+function isStandalone(){ return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true; }
+function isIOS(){ return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); }
+function instHidden(){ var t = +(sget("emp_inst_off") || 0); return t && (Date.now() - t) < 3 * 86400000; }
+function instShow(msg, withButton){
+  if (EMBEDDED || isStandalone() || instHidden()) return;
+  $("inst_t").textContent = msg; $("inst_b").classList.toggle("hide", !withButton); $("inst").classList.remove("hide");
+}
+function instHide(){ $("inst").classList.add("hide"); }
+window.addEventListener("beforeinstallprompt", function(e){
+  e.preventDefault(); deferredInstall = e;
+  instShow("📲 ثبّت التطبيق على هاتفك : يعمل دون انترنت و تظهر أيقونته على الشاشة الرئيسية.", true);
+});
+window.addEventListener("appinstalled", function(){ deferredInstall = null; instHide(); });
+$("inst_b").addEventListener("click", function(){
+  if (!deferredInstall) return;
+  var d = deferredInstall; deferredInstall = null;
+  d.prompt();
+  if (d.userChoice && d.userChoice.then) d.userChoice.then(function(){ instHide(); });
+});
+$("inst_x").addEventListener("click", function(){ sset("emp_inst_off", String(Date.now())); instHide(); });
+if (!EMBEDDED && location.protocol.indexOf("http") === 0 && !isStandalone()) {
+  if (isIOS()) instShow("📲 لتثبيت التطبيق : اضغط زر المشاركة ⬆️ ثم « إضافة إلى الشاشة الرئيسية ».", false);
+  else instTimer = setTimeout(function(){
+    if (!deferredInstall && /android/i.test(navigator.userAgent)) instShow("📲 لتثبيت التطبيق : افتح قائمة المتصفح ⋮ ثم اختر « تثبيت التطبيق » أو « إضافة إلى الشاشة الرئيسية ».", false);
+  }, 3000);
 }
 if (!EMBEDDED && location.protocol.indexOf("http") === 0) {      /* application installable (PWA) */
   var l1 = document.createElement("link"); l1.rel = "manifest"; l1.href = "manifest.webmanifest"; document.head.appendChild(l1);
